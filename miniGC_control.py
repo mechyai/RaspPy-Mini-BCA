@@ -58,7 +58,7 @@ class Sensor:
 
 def set_pwm_output(pca_obj, duty_cycle: float):
     """Takes in PCA PWM output and duty cycle from 0-100% and converts to 0x0 - 0xffff (65535) & updates PWM output."""
-    if duty_cycle > 100:
+    if duty_cycle > 100 or duty_cycle < 0:
         raise ValueError('PWM Duty Cycle must be between 0.0% & 100.0%')
     pca_obj.duty_cycle = 65535 * duty_cycle / 100
 
@@ -131,31 +131,33 @@ temp_humd_outdoor = Sensor(adafruit_hts221.HTS221(i2c), get_i2c_temp, get_w1_tem
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
 # w1 address
-
 temp_h20 = Sensor('28-8a2017eb8dff', get_w1_temp)  # pos6, in water reservoir
 
 # -- I2C PWM Control Initialize ---
 pca = adafruit_pca9685.PCA9685(i2c)
 pca.frequency = 120  # Hz
 # PWM output
-fan_L_circ = Actuator(pca.channels[0], set_pwm_output)
-fan_L_circ = Actuator(pca.channels[1], set_pwm_output)
-fan_L_vent = Actuator(pca.channels[2], set_pwm_output)
-fan_R_vent = Actuator(pca.channels[3], set_pwm_output)
-fan_mister = Actuator(pca.channels[4], set_pwm_output)
-fan_peltier = Actuator(pca.channels[5], set_pwm_output)
-pump_reservoir = Actuator(pca.channels[6], set_pwm_output)
+fan_L_circ = Actuator(pca.channels[6], set_pwm_output)
+fan_R_circ = Actuator(pca.channels[5], set_pwm_output)
+fan_L_vent = Actuator(pca.channels[0], set_pwm_output)
+fan_R_vent = Actuator(pca.channels[1], set_pwm_output)
+fan_mister = Actuator(pca.channels[2], set_pwm_output)
+fan_peltier = Actuator(pca.channels[3], set_pwm_output)
+pump_reservoir = Actuator(pca.channels[4], set_pwm_output)
 
 # --- GPIO pin scheme ---
 GPIO.setmode(GPIO.BCM)  # BCM channel, pin #, ex: GPIO #
-# Output
-mister_pin = Actuator(17, set_gpio_output)
+# Output, 4x
+pca_enable_pin = Actuator(10, set_gpio_output)  # LOW to enable pca PWM
+GPIO.setup(pca_enable_pin.actuator, GPIO.out)
+
+mister_pin = Actuator(21, set_gpio_output)
 GPIO.setup(mister_pin.actuator, GPIO.OUT)
 
-peltier_power_pin = Actuator(27, set_gpio_output)
+peltier_power_pin = Actuator(20, set_gpio_output)
 GPIO.setup(peltier_power_pin.actuator, GPIO.OUTPUT)
 
-peltier_control_pin = Actuator(22, set_gpio_output)
+peltier_control_pin = Actuator(16, set_gpio_output)
 GPIO.setup(peltier_control_pin.actuator, GPIO.OUTPUT)
 
 # --- LDC SCREEN ---
@@ -185,6 +187,9 @@ def act(action_tuples: list):
 def observe():
 
 
+while True:
+    mylcd.clear()  # reset display
+    mylcd.lcd_display_string("***SYSTEM OFF***", 1)
 
 
 
