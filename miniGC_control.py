@@ -23,8 +23,8 @@ to import necessary i2c libraries for sensors
 
 # CONFIG vars
 TEMP_UNIT = 'f'  # 'c' or 'f'
-TEMP_RES = 2  # decimal place / rounding of sensor input
-HUMD_RES = 2
+TEMP_RES = 1  # decimal place / rounding of sensor input
+HUMD_RES = 1
 
 
 class Actuator:
@@ -42,18 +42,20 @@ class Actuator:
 
 class Sensor:
     sensor_list = []
-    def __init__(self, sensor_obj, temp_function, humd_function = None):
+    def __init__(self, sensor_obj, temp_function, humd_function):
         self.sensor = sensor_obj
         self.temp_function = temp_function
         self.humd_function = humd_function
         self.sensor_list.append(weakref.ref(self))
+        # current readings
+        self.current_temp = None
+        self.current_humd = None
 
-    def read_temp(self):
-        return self.temp_function(self.sensor)
-
-    def read_humd(self):
+    def read(self):
+        if self.temp_function is not None:
+            self.current_temp =  convert_temp(self.temp_function(self.sensor))
         if self.humd_function is not None:
-            return self.humd_function(self.sensor)
+            self.current_humd = humd_round(self.humd_function(self.sensor))
 
 
 def set_pwm_output(pca_obj, duty_cycle: float):
@@ -116,11 +118,11 @@ i2c = busio.I2C(board.SCL, board.SDA)
 
 # sensor addresses
 # Temperature - MCP9808 (top/bottom, left/right interior array position)
-temp_TL_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x18), get_i2c_temp)  # pos1, left-upper rail
-temp_BL_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x19), get_i2c_temp)  # pos2, left-lower rail
-temp_TR_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x1A), get_i2c_temp)  # pos3, right-upper rail
-temp_BR_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x1B), get_i2c_temp)  # pos4, right-lower rail
-temp_peltier = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x1C), get_i2c_temp)  # pos5, peltier heat sink
+temp_TL_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x18), get_i2c_temp, None)  # pos1, left-upper rail
+temp_BL_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x19), get_i2c_temp, None)  # pos2, left-lower rail
+temp_TR_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x1A), get_i2c_temp, None)  # pos3, right-upper rail
+temp_BR_array = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x1B), get_i2c_temp, None)  # pos4, right-lower rail
+temp_peltier = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x1C), get_i2c_temp, None)  # pos5, peltier heat sink
 # Humidity & Temp - SHT30-D Weatherproof
 temp_humd_indoor = Sensor(adafruit_sht31d.SHT31D(i2c), get_i2c_temp, get_i2c_humd)  # pos7, inside gc
 # Humidity & Temp - HTS221 Outdoor
@@ -131,7 +133,7 @@ temp_humd_outdoor = Sensor(adafruit_hts221.HTS221(i2c), get_i2c_temp, get_w1_tem
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
 # w1 address
-temp_h20 = Sensor('28-8a2017eb8dff', get_w1_temp)  # pos6, in water reservoir
+temp_h20 = Sensor('28-8a2017eb8dff', get_w1_temp, None)  # pos6, in water reservoir
 
 # -- I2C PWM Control Initialize ---
 pca = adafruit_pca9685.PCA9685(i2c)
@@ -184,12 +186,34 @@ def act(action_tuples: list):
     for actuator, setpoint in action_tuples:
         actuator.actuate(setpoint)
 
+
 def observe():
+    # temp_TL_array, temp_BL_array, temp_TR_array, temp_BR_array, temp_peltier, temp_humd_indoor, temp_humd_outdoor, temp_h20
+    for sensor in Sensor.sensor_list:
+        sensor.read()
+
+
+def average_val(*sensor_values):
+    # metric is 'temp' or 'humd'
+    sum = 0
+    for value in sensor_values:
+        sum = sum + value
+    return sum / len(sensor_values)
+
+
 
 
 while True:
     mylcd.clear()  # reset display
-    mylcd.lcd_display_string("***SYSTEM OFF***", 1)
+    temp_array_avg = temp_round(average_val(temp_TL_array.current_temp,
+                                temp_TR_array.current_temp,
+                                temp_BR_array.current_temp,
+                                temp_BL_array.current_temp))
+
+    mylcd.lcd_display_string(f"A:{int(temp_array_avg)}f,O:{temp_humd_outdoor.current_temp}f,"
+                             f"P:{int(temp_peltier.current_temp)}f", 1)
+    mylcd.lcd_display_string(f"W:{int(temp_h20.current_temp)}f,I:{int(temp_humd_indoor.current_humd)}%,"
+                             f"O:{temp_humd_outdoor.current_humd}%", 2)
 
 
 
