@@ -53,9 +53,9 @@ class Sensor:
 
     def read(self):
         if self.temp_function is not None:
-            self.current_temp =  convert_temp(self.temp_function(self.sensor))
+            self.current_temp =  self.temp_function(self.sensor)
         if self.humd_function is not None:
-            self.current_humd = humd_round(self.humd_function(self.sensor))
+            self.current_humd = self.humd_function(self.sensor)
 
 
 def set_pwm_output(pca_obj, duty_cycle: float):
@@ -126,7 +126,7 @@ temp_peltier = Sensor(adafruit_mcp9808.MCP9808(i2c, address=0x1C), get_i2c_temp,
 # Humidity & Temp - SHT30-D Weatherproof
 temp_humd_indoor = Sensor(adafruit_sht31d.SHT31D(i2c), get_i2c_temp, get_i2c_humd)  # pos7, inside gc
 # Humidity & Temp - HTS221 Outdoor
-temp_humd_outdoor = Sensor(adafruit_hts221.HTS221(i2c), get_i2c_temp, get_w1_temp)  # pos8, outside gc
+temp_humd_outdoor = Sensor(adafruit_hts221.HTS221(i2c), get_i2c_temp, get_i2c_humd)  # pos8, outside gc
 
 # --- 1W Sensor Initialize ---
 #  1-wire DS18B20 digital temp sensor addresses
@@ -151,16 +151,16 @@ pump_reservoir = Actuator(pca.channels[4], set_pwm_output)
 GPIO.setmode(GPIO.BCM)  # BCM channel, pin #, ex: GPIO #
 # Output, 4x
 pca_enable_pin = Actuator(10, set_gpio_output)  # LOW to enable pca PWM
-GPIO.setup(pca_enable_pin.actuator, GPIO.out)
+GPIO.setup(pca_enable_pin.actuator, GPIO.OUT)
 
 mister_pin = Actuator(21, set_gpio_output)
-GPIO.setup(mister_pin.actuator, GPIO.OUTPUT)
+GPIO.setup(mister_pin.actuator, GPIO.OUT)
 
 peltier_power_pin = Actuator(20, set_gpio_output)
-GPIO.setup(peltier_power_pin.actuator, GPIO.OUTPUT)
+GPIO.setup(peltier_power_pin.actuator, GPIO.OUT)
 
 peltier_control_pin = Actuator(16, set_gpio_output)
-GPIO.setup(peltier_control_pin.actuator, GPIO.OUTPUT)
+GPIO.setup(peltier_control_pin.actuator, GPIO.OUT)
 
 # --- LDC SCREEN ---
 lcd = 0x27  # I2C
@@ -187,9 +187,9 @@ def act(action_tuples: list):
         actuator.actuate(setpoint)
 
 
-def observe():
+def observe(sensor_list: list):
     # temp_TL_array, temp_BL_array, temp_TR_array, temp_BR_array, temp_peltier, temp_humd_indoor, temp_humd_outdoor, temp_h20
-    for sensor in Sensor.sensor_list:
+    for sensor in sensor_list:
         sensor.read()
 
 
@@ -203,16 +203,26 @@ def average_val(*sensor_values):
 
 
 
+print("Starting Up...")
 while True:
-    mylcd.clear()  # reset display
+    #mylcd.clear()  # reset display
+    observe([temp_TL_array, temp_BL_array, temp_TR_array, temp_BR_array, temp_peltier, temp_humd_indoor, temp_humd_outdoor, temp_h20])
     temp_array_avg = temp_round(average_val(temp_TL_array.current_temp,
                                 temp_TR_array.current_temp,
                                 temp_BR_array.current_temp,
                                 temp_BL_array.current_temp))
 
+    print("--- Sensor Reading ---")
+    print(f"Peltier Temp: {temp_peltier.current_temp}")
+    print(f"Avg. Interior Array Temp: {temp_array_avg}f")
+    print(f"Indoor Temp: {temp_humd_indoor.current_temp}f")
+    print(f"Indoor Humd: {temp_humd_indoor.current_humd}%") 
+    print(f"Outdoor Temp: {temp_humd_outdoor.current_temp}f")
+    print(f"Outdoor Humd: {temp_humd_outdoor.current_humd}%")
+
     mylcd.lcd_display_string(f"A:{int(temp_array_avg)}f,O:{temp_humd_outdoor.current_temp}f,"
                              f"P:{int(temp_peltier.current_temp)}f", 1)
-    mylcd.lcd_display_string(f"W:{int(temp_h20.current_temp)}f,I:{int(temp_humd_indoor.current_humd)}%,"
+    mylcd.lcd_display_string(f"I:{int(temp_humd_indoor.current_temp)}f,I:{int(temp_humd_indoor.current_humd)}%,"
                              f"O:{temp_humd_outdoor.current_humd}%", 2)
 
 
