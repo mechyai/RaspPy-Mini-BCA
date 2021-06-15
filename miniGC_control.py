@@ -154,7 +154,7 @@ pca_enable_pin = Actuator(10, set_gpio_output)  # LOW to enable pca PWM
 GPIO.setup(pca_enable_pin.actuator, GPIO.out)
 
 mister_pin = Actuator(21, set_gpio_output)
-GPIO.setup(mister_pin.actuator, GPIO.OUT)
+GPIO.setup(mister_pin.actuator, GPIO.OUTPUT)
 
 peltier_power_pin = Actuator(20, set_gpio_output)
 GPIO.setup(peltier_power_pin.actuator, GPIO.OUTPUT)
